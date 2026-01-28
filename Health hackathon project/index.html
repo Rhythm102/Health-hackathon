@@ -1,0 +1,117 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RescueLink – Live Monitor</title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- MQTT client -->
+   <script type="module" src="./js/app.js"></script>
+
+</head>
+<body>
+
+  <!-- ========== TOP BAR ========== -->
+  <header class="topbar">
+    <div class="logo">
+      <span class="logo-icon">💙</span>
+      <div>
+        <strong>RescueLink</strong>
+        <small>Hospital Dashboard</small>
+      </div>
+    </div>
+
+    <div class="connection-status">
+      <span class="dot online"></span>
+      Connected • 4G/LTE • MQTT
+    </div>
+
+    <div class="user">
+      Dr. A. Chen ⌄
+    </div>
+  </header>
+
+  <!-- ========== MAIN LAYOUT ========== -->
+  <div class="container">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <button class="nav active">Live Monitor</button>
+      <button class="nav">Map & ETA</button>
+      <button class="nav">Patient Profile</button>
+      <button class="nav">Messages</button>
+      <button class="nav">Audit Log</button>
+    </aside>
+
+    <!-- CONTENT -->
+    <main class="content">
+
+      <!-- HEADER -->
+      <div class="page-header">
+        <h2>Patient ID: <span>P-8492</span></h2>
+        <span class="status stable">Stable (Transporting)</span>
+      </div>
+
+      <!-- DASHBOARD GRID -->
+      <div class="grid">
+
+        <!-- HEART RATE -->
+        <div class="card">
+          <h4>Heart Rate</h4>
+          <div class="metric">
+            <span id="heartRate">--</span> bpm
+          </div>
+          <small>Normal Range: 60–100</small>
+        </div>
+
+        <!-- SPO2 -->
+        <div class="card">
+          <h4>SpO₂</h4>
+          <div class="metric">
+            <span id="spo2">--</span> %
+          </div>
+          <small>Normal Range: 95–100</small>
+        </div>
+
+        <!-- ECG -->
+        <div class="card ecg">
+          <h4>Real-time ECG • Lead II</h4>
+          <canvas id="ecgCanvas"></canvas>
+        </div>
+
+        <!-- MAP -->
+        <div class="card map">
+          <h4>Ambulance Location & ETA</h4>
+          <div id="mapPlaceholder">
+            ETA: <span id="eta">--</span><br>
+            Distance: <span id="distance">--</span> km
+          </div>
+        </div>
+
+        <!-- BLOOD PRESSURE -->
+        <div class="card">
+          <h4>Blood Pressure</h4>
+          <div class="metric">
+            <span id="bp">--/--</span> mmHg
+          </div>
+        </div>
+
+        <!-- TEMPERATURE -->
+        <div class="card">
+          <h4>Temperature</h4>
+          <div class="metric">
+            <span id="temp">--</span> °C
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- JS -->
+  <script src="app.js"></script>
+</body>
+</html>
