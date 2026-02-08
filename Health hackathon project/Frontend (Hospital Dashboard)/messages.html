@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RescueLink – Messages</title>
+  
+  <!-- MQTT client -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <style>
+    /* Common Reset */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Inter, system-ui, sans-serif;
+    }
+
+    /* GPS Mode Styles */
+    body.gps-active {
+      background: #f5f7fb;
+      color: #1f2937;
+    }
+
+    body.gps-active .gps-mode {
+      display: block;
+    }
+
+    body.gps-active .satellite-mode {
+      display: none;
+    }
+
+    body.satellite-active .gps-mode {
+      display: none;
+    }
+
+    body.satellite-active .satellite-mode {
+      display: block;
+    }
+
+    /* GPS Mode - Header */
+    .gps-mode .topbar {
+      background: white;
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 24px;
+      align-items: center;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+    }
+
+    .gps-mode .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .gps-mode .brand span {
+      font-size: 12px;
+      color: #6b7280;
+      font-weight: 400;
+    }
+
+    .gps-mode .status {
+      color: green;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .gps-mode .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+      background: green;
+    }
+
+    /* Layout */
+    .gps-mode .container {
+      display: flex;
+      height: calc(100vh - 60px);
+    }
+
+    .gps-mode .sidebar {
+      width: 220px;
+      padding: 20px;
+      background: white;
+      box-shadow: 1px 0 6px rgba(0,0,0,0.05);
+    }
+
+    .gps-mode .sidebar ul {
+      list-style: none;
+    }
+
+    .gps-mode .sidebar li {
+      padding: 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 6px;
+      color: #1f2937;
+      font-size: 14px;
+    }
+
+    .gps-mode .sidebar li:hover {
+      background: #f3f4f6;
+    }
+
+    .gps-mode .sidebar li.active {
+      background: #3b6ef5;
+      color: white;
+    }
+
+    /* Messages Layout */
+    .gps-mode .messages-layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .gps-mode .conversations {
+      background: white;
+      border-radius: 16px;
+      padding: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+      height: fit-content;
+    }
+
+    .gps-mode .conversation {
+      padding: 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 8px;
+    }
+
+    .gps-mode .conversation:hover {
+      background: #f9fafb;
+    }
+
+    .gps-mode .conversation.active {
+      background: #eaf2ff;
+    }
+
+    .gps-mode .conversation strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #1f2937;
+    }
+
+    .gps-mode .conversation .online {
+      color: #22c55e;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .gps-mode .conversation small {
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    /* Chat */
+    .gps-mode .chat {
+      background: white;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+      height: calc(100vh - 140px);
+    }
+
+    .gps-mode .chat-header {
+      padding: 16px 20px;
+      font-weight: 600;
+      border-bottom: 1px solid #e5e7eb;
+      color: #1f2937;
+    }
+
+    .gps-mode .chat-header span {
+      font-size: 12px;
+      color: #6b7280;
+      font-weight: 400;
+      margin-left: 12px;
+    }
+
+    .gps-mode .chat-body {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      background: #f9fafb;
+    }
+
+    .gps-mode .message {
+      max-width: 65%;
+      padding: 12px 16px;
+      border-radius: 14px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .gps-mode .message.doctor {
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      color: white;
+      margin-left: auto;
+      border-bottom-right-radius: 4px;
+    }
+
+    .gps-mode .message.ambulance {
+      background: white;
+      color: #111827;
+      border: 1px solid #e5e7eb;
+      border-bottom-left-radius: 4px;
+    }
+
+    .gps-mode .message .timestamp {
+      font-size: 11px;
+      opacity: 0.7;
+      margin-top: 4px;
+      display: block;
+    }
+
+    /* Quick Actions */
+    .gps-mode .quick-actions {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid #e5e7eb;
+      overflow-x: auto;
+      flex-wrap: wrap;
+    }
+
+    .gps-mode .quick-actions button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 999px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+
+    .gps-mode .quick-actions button:hover {
+      background: #1d4ed8;
+    }
+
+    .gps-mode .quick-actions button.critical {
+      background: #dc2626;
+    }
+
+    .gps-mode .quick-actions button.critical:hover {
+      background: #b91c1c;
+    }
+
+    /* Input */
+    .gps-mode .chat-input {
+      display: flex;
+      padding: 14px 16px;
+      border-top: 1px solid #e5e7eb;
+      background: white;
+    }
+
+    .gps-mode .chat-input input {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      font-size: 14px;
+    }
+
+    .gps-mode .chat-input input:focus {
+      outline: none;
+      border-color: #2563eb;
+    }
+
+    .gps-mode .chat-input button {
+      margin-left: 10px;
+      background: #2563eb;
+      color: white;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .gps-mode .hint {
+      font-size: 12px;
+      color: #6b7280;
+      padding: 8px 16px;
+      text-align: center;
+    }
+
+    /* Satellite Mode Styles */
+    body.satellite-active {
+      background: radial-gradient(circle at top, #12263f, #060d18);
+      color: #f8fafc;
+    }
+
+    .satellite-mode .top-bar {
+      display: flex;
+      justify-content: space-between;
+      padding: 20px 30px;
+    }
+
+    .satellite-mode h1 {
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+
+    .satellite-mode .subtitle {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .satellite-mode .satellite-badge {
+      background: #1e2b3c;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+    }
+
+    .satellite-mode .satellite-badge span {
+      display: block;
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+
+    .satellite-mode .dashboard {
+      padding: 20px;
+    }
+
+    .satellite-mode .chat-container {
+      background: linear-gradient(180deg, #1f2f44, #152235);
+      border-radius: 16px;
+      border: 1px solid #334155;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .satellite-mode .chat-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #334155;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    .satellite-mode .chat-body {
+      padding: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+      background: #0b1624;
+    }
+
+    .satellite-mode .message {
+      max-width: 80%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .satellite-mode .message.doctor {
+      background: #1e40af;
+      color: #dbeafe;
+      margin-left: auto;
+    }
+
+    .satellite-mode .message.ambulance {
+      background: #1e2b3c;
+      color: #f8fafc;
+      border: 1px solid #334155;
+    }
+
+    .satellite-mode .message .timestamp {
+      font-size: 10px;
+      opacity: 0.6;
+      margin-top: 4px;
+      display: block;
+    }
+
+    .satellite-mode .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid #334155;
+    }
+
+    .satellite-mode .quick-actions button {
+      background: #1e40af;
+      color: #dbeafe;
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      padding: 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .satellite-mode .quick-actions button.critical {
+      background: #7f1d1d;
+      border-color: #dc2626;
+      color: #fecaca;
+    }
+
+    .satellite-mode .chat-input {
+      display: flex;
+      padding: 14px 16px;
+      border-top: 1px solid #334155;
+      background: #152235;
+    }
+
+    .satellite-mode .chat-input input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0b1624;
+      color: #f8fafc;
+      font-size: 13px;
+    }
+
+    .satellite-mode .chat-input button {
+      margin-left: 10px;
+      background: #1e40af;
+      color: white;
+      border-radius: 8px;
+      width: 40px;
+      height: 40px;
+      border: none;
+      cursor: pointer;
+    }
+
+    .satellite-mode .hint {
+      font-size: 11px;
+      color: #94a3b8;
+      padding: 8px 16px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body class="gps-active">
+
+  <!-- ========== GPS MODE UI ========== -->
+  <div class="gps-mode">
+    <header class="topbar">
+      <div class="brand">
+        💙 RescueLink <span>Hospital Dashboard</span>
+      </div>
+      <div class="status">
+        <span class="dot"></span> Connected · 4G/LTE · MQTT
+      </div>
+      <div class="user">Dr. A. Chen ⌄</div>
+    </header>
+
+    <div class="container">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <ul>
+          <li onclick="window.location.href='index.html'">Live Monitor</li>
+          <li onclick="window.location.href='map.html'">Map & ETA</li>
+          <li onclick="window.location.href='patient.html'">Patient Profile</li>
+          <li class="active">Messages</li>
+          <li>Audit Log</li>
+        </ul>
+      </aside>
+
+      <!-- Messages Layout -->
+      <main class="messages-layout">
+        <!-- Conversation List -->
+        <section class="conversations">
+          <div class="conversation active">
+            <strong>🚑 Ambulance Unit 12</strong>
+            <span class="online">● Active</span><br>
+            <small>Patient P-8492</small>
+          </div>
+          <div class="conversation">
+            <strong>🏥 ER Triage</strong>
+            <small>5 min ago</small>
+          </div>
+          <div class="conversation">
+            <strong>❤️ Cardiology</strong>
+            <small>15 min ago</small>
+          </div>
+        </section>
+
+        <!-- Chat Window -->
+        <section class="chat">
+          <div class="chat-header">
+            Doctor ↔ Ambulance
+            <span>Patient ID: P-8492</span>
+          </div>
+
+          <div class="chat-body" id="chatBody">
+            <!-- Messages will be injected here -->
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="quick-actions">
+            <button onclick="sendQuickMessage('🫁 Administer Oxygen Immediately')">🫁 Give Oxygen</button>
+            <button onclick="sendQuickMessage('💉 Establish IV Line')">💉 Start IV</button>
+            <button onclick="sendQuickMessage('🏥 Trauma Team Activated - ETA?')">🏥 Trauma Team Ready</button>
+            <button onclick="sendQuickMessage('📊 Send Current ECG Reading')">📊 Send ECG</button>
+            <button onclick="sendQuickMessage('💊 Administer Aspirin 325mg')">💊 Give Aspirin</button>
+            <button onclick="sendQuickMessage('🩹 Apply Pressure to Bleeding')">🩹 Stop Bleeding</button>
+          </div>
+
+          <!-- Message Input -->
+          <div class="chat-input">
+            <input type="text" id="messageInput" placeholder="Type a message..." />
+            <button id="sendBtn">➤</button>
+          </div>
+
+          <small class="hint">
+            * Messages sync in real-time via MQTT
+          </small>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- ========== SATELLITE MODE UI ========== -->
+  <div class="satellite-mode">
+    <header class="top-bar">
+      <div>
+        <h1>RescueLink Hospital Dashboard</h1>
+        <span class="subtitle">SATELLITE MODE ACTIVE - Messages</span>
+      </div>
+
+      <div class="satellite-badge">
+        ● Satellite • Iridium SBD
+        <span>Text Only</span>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <div class="chat-container">
+        <div class="chat-header">
+          Doctor ↔ Ambulance (Text Only)
+        </div>
+
+        <div class="chat-body" id="chatBodySat">
+          <!-- Messages will be injected here -->
+        </div>
+
+        <!-- Quick Actions (Simplified) -->
+        <div class="quick-actions">
+          <button onclick="sendQuickMessage('GIVE OXYGEN')">OXYGEN</button>
+          <button onclick="sendQuickMessage('START IV')">START IV</button>
+          <button onclick="sendQuickMessage('SEND ECG')">SEND ECG</button>
+          <button onclick="sendQuickMessage('GIVE ASPIRIN')">ASPIRIN</button>
+          <button onclick="sendQuickMessage('STOP BLEEDING')">STOP BLEEDING</button>
+          <button onclick="sendQuickMessage('CONFIRM ETA')">CONFIRM ETA</button>
+        </div>
+
+        <!-- Message Input -->
+        <div class="chat-input">
+          <input type="text" id="messageInputSat" placeholder="Type message..." />
+          <button id="sendBtnSat">➤</button>
+        </div>
+
+        <small class="hint">
+          Low bandwidth mode - text only
+        </small>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="../Javascript/message.js"></script>
+</body>
+</html>
