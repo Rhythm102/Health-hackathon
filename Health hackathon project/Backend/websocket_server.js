@@ -8,8 +8,77 @@
 
 const WebSocket = require('ws');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 const PORT = 8080;
+
+// Message database file
+const MESSAGE_DB_FILE = path.join(__dirname, 'messages_db.json');
+const MESSAGE_HISTORY_MAX = 500;
+
+// In-memory message cache + file persistence
+const messageDatabase = {
+  messages: [],
+  
+  load() {
+    try {
+      if (fs.existsSync(MESSAGE_DB_FILE)) {
+        const data = fs.readFileSync(MESSAGE_DB_FILE, 'utf-8');
+        const parsed = JSON.parse(data);
+        this.messages = Array.isArray(parsed) ? parsed : [];
+        console.log(`✅ Loaded ${this.messages.length} messages from database file`);
+      } else {
+        console.log('📝 Message database file not found, starting fresh');
+        this.messages = [];
+      }
+    } catch (err) {
+      console.error('❌ Error loading messages from database:', err);
+      this.messages = [];
+    }
+  },
+  
+  save() {
+    try {
+      fs.writeFileSync(MESSAGE_DB_FILE, JSON.stringify(this.messages, null, 2), 'utf-8');
+      console.log(`💾 Saved ${this.messages.length} messages to database`);
+    } catch (err) {
+      console.error('❌ Error saving messages to database:', err);
+    }
+  },
+  
+  add(sender, text, timestamp) {
+    const message = {
+      sender,
+      text,
+      timestamp: timestamp || Date.now(),
+      id: Date.now() + Math.random()
+    };
+    
+    this.messages.push(message);
+    
+    // Trim to max size
+    if (this.messages.length > MESSAGE_HISTORY_MAX) {
+      this.messages = this.messages.slice(-MESSAGE_HISTORY_MAX);
+    }
+    
+    this.save();
+    return message;
+  },
+  
+  getRecent(limit = 100) {
+    return this.messages.slice(-limit);
+  },
+  
+  clear() {
+    this.messages = [];
+    this.save();
+    console.log('🗑️ Message database cleared');
+  }
+};
+
+// Load messages on startup
+messageDatabase.load();
 
 // Create HTTP server
 const server = http.createServer((req, res) => {
@@ -48,12 +117,30 @@ wss.on('connection', (ws, req) => {
           clientId: clientId,
           clientType: message.clientType
         }));
+        
+        // Send recent message history so client can catch up
+        try {
+          const recentMessages = messageDatabase.getRecent(100);
+          if (recentMessages.length) {
+            ws.send(JSON.stringify({ type: 'history', messages: recentMessages }));
+            console.log(`📚 Sent ${recentMessages.length} historical messages to ${clientId}`);
+          }
+        } catch (err) {
+          console.error('❌ Failed to send history to client', err);
+        }
         return;
       }
       
       // Handle chat messages
       if (message.type === 'chat') {
         console.log(`💬 Message from ${message.sender}: ${message.text.substring(0, 50)}...`);
+        
+        // Store message in database
+        try {
+          messageDatabase.add(message.sender, message.text, message.timestamp);
+        } catch (err) {
+          console.error('❌ Error saving message to database', err);
+        }
         
         // Broadcast to all OTHER clients
         clients.forEach((client, id) => {
@@ -62,6 +149,23 @@ wss.on('connection', (ws, req) => {
               type: 'chat',
               sender: message.sender,
               text: message.text,
+              timestamp: message.timestamp || Date.now()
+            }));
+          }
+        });
+      }
+      
+      // Handle ECG waveform data
+      if (message.type === 'ecg') {
+        console.log(`💓 ECG from ${message.sender}: ${message.samples.length} samples`);
+        
+        // Broadcast ECG to all OTHER clients
+        clients.forEach((client, id) => {
+          if (id !== clientId && client.ws.readyState === WebSocket.OPEN) {
+            client.ws.send(JSON.stringify({
+              type: 'ecg',
+              sender: message.sender,
+              samples: message.samples,
               timestamp: message.timestamp || Date.now()
             }));
           }
@@ -130,6 +234,10 @@ server.listen(PORT, () => {
 // Handle server shutdown
 process.on('SIGINT', () => {
   console.log('\n🛑 Shutting down server...');
+  
+  // Save messages before shutdown
+  messageDatabase.save();
+  console.log('💾 Messages saved');
   
   // Close all client connections
   clients.forEach((client, id) => {

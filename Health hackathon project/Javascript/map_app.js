@@ -13,13 +13,21 @@ let routeLine = null;
 const HOSPITAL_LAT = 23.2156;
 const HOSPITAL_LON = 77.4304;
 
+// Ambulance current position & ETA
+let ambulanceCurrentLat = 23.183;  // Rani Kamlapati pickup
+let ambulanceCurrentLon = 77.416;
+let currentETA = 0;
+let remainingDistance = 5.28;
+
 // Initialize Leaflet Map
 function initializeMap() {
-  if (map) return; // Already initialized
+  if (map) return;
   
   try {
-    // Create map centered on hospital
-    map = L.map('map').setView([HOSPITAL_LAT, HOSPITAL_LON], 13);
+    // Create map centered between ambulance and hospital
+    const centerLat = (ambulanceCurrentLat + HOSPITAL_LAT) / 2;
+    const centerLon = (ambulanceCurrentLon + HOSPITAL_LON) / 2;
+    map = L.map('map').setView([centerLat, centerLon], 13);
     
     // Add OpenStreetMap tiles (free!)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -96,11 +104,33 @@ function updateRoute(ambulanceLat, ambulanceLon) {
 function updateAmbulancePosition(lat, lon) {
   if (!map || !ambulanceMarker) return;
   
+  ambulanceCurrentLat = lat;
+  ambulanceCurrentLon = lon;
+  
   const newPos = [lat, lon];
   ambulanceMarker.setLatLng(newPos);
-  ambulanceMarker.bindPopup('<b>🚑 Ambulance</b><br>Patient: P-8492<br>Moving...').openPopup();
+  ambulanceMarker.bindPopup('<b>🚑 Ambulance</b><br>Patient: P-8492<br>En Route...').openPopup();
   
   updateRoute(lat, lon);
+}
+
+// Update ETA display
+function updateETA(data) {
+  const etaElement = document.getElementById('eta-display');
+  if (etaElement) {
+    const minutes = data.eta_minutes || 0;
+    const seconds = (data.eta_seconds % 60) || 0;
+    const km = (data.remaining_km?.toFixed(2)) || '0';
+    const status = data.status || 'en_route';
+    
+    if (status === 'arrived') {
+      etaElement.innerHTML = `<strong>✅ Arrived at Hospital!</strong>`;
+      etaElement.style.color = '#059669';
+    } else {
+      etaElement.innerHTML = `<strong>ETA: ${minutes}m ${seconds}s</strong><br><small>${km} km remaining</small>`;
+      etaElement.style.color = '#2563eb';
+    }
+  }
 }
 
 // Initialize map when page loads
@@ -252,3 +282,8 @@ client.on("message", (topic, payload) => {
 });
 
 console.log(`🗺️ Map & ETA page initialized in ${currentMode} mode`);
+
+// Expose functions globally for MQTT callbacks
+window.updateAmbulancePosition = updateAmbulancePosition;
+window.updateETA = updateETA;
+console.log("✅ Real-time ambulance tracking enabled");
