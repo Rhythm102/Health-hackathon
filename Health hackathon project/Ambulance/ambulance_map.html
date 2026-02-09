@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RescueLink – Ambulance Map & ETA</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- MQTT -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background: #f0fdf4;
+      color: #064e3b;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Bar - Green Theme */
+    .top-bar {
+      background: linear-gradient(135deg, #059669, #10b981);
+      padding: 16px 20px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(5, 150, 105, 0.2);
+    }
+
+    .patient-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      color: white;
+    }
+
+    .status-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status-badge {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .status-badge.amb {
+      background: #065f46;
+      color: #d1fae5;
+    }
+
+    .status-badge.mqtt {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+    }
+
+    .status-badge.normal {
+      background: white;
+      color: #059669;
+    }
+
+    .status-badge.eta {
+      background: #fef3c7;
+      color: #78350f;
+    }
+
+    .last-updated {
+      text-align: right;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.9);
+      margin-top: 4px;
+    }
+
+    /* Main Container */
+    .container {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 350px;
+      overflow: hidden;
+    }
+
+    /* Map Section */
+    .map-section {
+      position: relative;
+      background: #f9fafb;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ETA Info Box on Map */
+    .eta-box {
+      position: absolute;
+      bottom: 100px;
+      left: 20px;
+      background: white;
+      border: 2px solid #059669;
+      border-radius: 16px;
+      padding: 16px 20px;
+      z-index: 1000;
+      box-shadow: 0 4px 16px rgba(5, 150, 105, 0.2);
+    }
+
+    .eta-box .label {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .eta-box .value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #059669;
+    }
+
+    .eta-box .distance {
+      font-size: 14px;
+      color: #065f46;
+      margin-top: 4px;
+    }
+
+    /* Right Panel */
+    .right-panel {
+      background: white;
+      padding: 24px;
+      overflow-y: auto;
+      border-left: 2px solid #d1fae5;
+    }
+
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #6b7280;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .hospital-card {
+      background: linear-gradient(135deg, #059669, #10b981);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
+    }
+
+    .hospital-name {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: white;
+    }
+
+    .hospital-address {
+      font-size: 13px;
+      color: #d1fae5;
+      margin-bottom: 16px;
+    }
+
+    .confirm-btn {
+      width: 100%;
+      background: white;
+      color: #059669;
+      border: none;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .confirm-btn:hover {
+      background: #ecfdf5;
+      transform: translateY(-1px);
+    }
+
+    .confirm-btn:active {
+      transform: scale(0.98);
+    }
+
+    .nearest-hospitals {
+      margin-top: 24px;
+    }
+
+    .hospital-item {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+
+    .hospital-item:hover {
+      background: #ecfdf5;
+      border-color: #059669;
+    }
+
+    .hospital-icon {
+      width: 40px;
+      height: 40px;
+      background: #059669;
+      color: white;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .hospital-info h4 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #064e3b;
+    }
+
+    .hospital-meta {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    /* Bottom Navigation */
+    .bottom-nav {
+      background: white;
+      border-top: 2px solid #d1fae5;
+      display: flex;
+      justify-content: space-around;
+      padding: 8px 0 20px;
+      flex-shrink: 0;
+      box-shadow: 0 -2px 8px rgba(5, 150, 105, 0.1);
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      color: #6b7280;
+      text-decoration: none;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      padding: 8px 16px;
+      border-radius: 8px;
+    }
+
+    .nav-item.active {
+      color: #059669;
+      background: #ecfdf5;
+    }
+
+    .nav-item:hover {
+      color: #047857;
+    }
+
+    .nav-icon {
+      font-size: 24px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+
+      .right-panel {
+        display: none;
+      }
+
+      .eta-box {
+        bottom: 80px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div class="patient-info">
+      👤 <strong>PAT-8492</strong>
+    </div>
+    <div class="status-row">
+      <div class="status-badge amb">AMB-12</div>
+      <div class="status-badge mqtt" id="mqtt-status">📡 Connecting...</div>
+      <div class="status-badge normal">NORMAL</div>
+      <div class="status-badge eta">🕐 ETA <span id="top-eta">--</span></div>
+    </div>
+    <div class="last-updated">Last Updated: <span id="last-updated">--:--:--</span></div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="container">
+    
+    <!-- Map Section -->
+    <div class="map-section">
+      <div id="map"></div>
+      
+      <!-- ETA Info Box -->
+      <div class="eta-box">
+        <div class="label">ETA to Hospital</div>
+        <div class="value"><span id="eta-value">--</span></div>
+        <div class="distance">• <span id="distance-value">--</span> km away</div>
+      </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="right-panel">
+      <div class="section-title">SELECTED HOSPITAL</div>
+      
+      <div class="hospital-card">
+        <div class="hospital-name">AIIMS Bhopal</div>
+        <div class="hospital-address">Saket Nagar, Bhopal, Madhya Pradesh 462020</div>
+        <button class="confirm-btn" onclick="confirmDestination()">✓ CONFIRM DESTINATION</button>
+      </div>
+
+      <div class="section-title">ROUTE STATUS</div>
+      
+      <div id="route-status" style="background: #f9fafb; padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+        <p style="margin-bottom: 8px;"><strong>Current Location:</strong> <span id="current-location">--</span></p>
+        <p style="margin-bottom: 8px;"><strong>Speed:</strong> <span id="current-speed">--</span> km/h</p>
+        <p><strong>Status:</strong> <span id="route-status-text">--</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <div class="bottom-nav">
+    <a href="messages.html" class="nav-item">
+      <div class="nav-icon">💬</div>
+      <div>Messages</div>
+    </a>
+    <a href="ambulance_map.html" class="nav-item active">
+      <div class="nav-icon">🗺️</div>
+      <div>Map & ETA</div>
+    </a>
+    <div class="nav-item" onclick="alert('Vitals page coming soon!')">
+      <div class="nav-icon">📊</div>
+      <div>Vitals</div>
+    </div>
+    <div class="nav-item" onclick="alert('Handover page coming soon!')">
+      <div class="nav-icon">🤝</div>
+      <div>Handover</div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize map
+    let map, ambulanceMarker, hospitalMarker, routeLine;
+    
+    const HOSPITAL_LAT = 23.2156;
+    const HOSPITAL_LON = 77.4304;
+    
+    let currentAmbulanceLat = 23.2599;
+    let currentAmbulanceLon = 77.4126;
+    
+    function initMap() {
+      // Create map centered between ambulance and hospital
+      const centerLat = (currentAmbulanceLat + HOSPITAL_LAT) / 2;
+      const centerLon = (currentAmbulanceLon + HOSPITAL_LON) / 2;
+      
+      map = L.map('map', {
+        zoomControl: true
+      }).setView([centerLat, centerLon], 13);
+      
+      // OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+      
+      // Hospital marker (green)
+      const hospitalIcon = L.divIcon({
+        html: '<div style="background: #059669; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 3px solid white; color: white; font-weight: bold;">H</div>',
+        className: '',
+        iconSize: [50, 50]
+      });
+      
+      hospitalMarker = L.marker([HOSPITAL_LAT, HOSPITAL_LON], {
+        icon: hospitalIcon
+      }).addTo(map);
+      
+      hospitalMarker.bindPopup('<b>🏥 AIIMS Bhopal</b><br>Destination');
+      
+      // Ambulance marker (white with green)
+      const ambulanceIcon = L.divIcon({
+        html: '<div style="background: white; padding: 8px 12px; border-radius: 8px; font-weight: 700; color: #059669; box-shadow: 0 2px 8px rgba(5,150,105,0.3); border: 2px solid #059669;">🚑 AMB-12</div>',
+        className: '',
+        iconSize: [80, 40]
+      });
+      
+      ambulanceMarker = L.marker([currentAmbulanceLat, currentAmbulanceLon], {
+        icon: ambulanceIcon
+      }).addTo(map);
+      
+      ambulanceMarker.bindPopup('<b>🚑 Ambulance Unit 12</b><br>En route to hospital');
+      
+      // Draw route
+      updateRoute(currentAmbulanceLat, currentAmbulanceLon);
+      
+      console.log('✅ Map initialized');
+    }
+    
+    function updateRoute(ambulanceLat, ambulanceLon) {
+      if (!map) return;
+      
+      if (routeLine) {
+        map.removeLayer(routeLine);
+      }
+      
+      routeLine = L.polyline([
+        [ambulanceLat, ambulanceLon],
+        [HOSPITAL_LAT, HOSPITAL_LON]
+      ], {
+        color: '#059669',
+        weight: 4,
+        opacity: 0.8,
+        dashArray: '10, 10'
+      }).addTo(map);
+      
+      const bounds = L.latLngBounds([
+        [ambulanceLat, ambulanceLon],
+        [HOSPITAL_LAT, HOSPITAL_LON]
+      ]);
+      map.fitBounds(bounds, { padding: [100, 100] });
+    }
+    
+    function confirmDestination() {
+      alert('✓ Destination confirmed!\n\nAIIMS Bhopal has been notified of your arrival.');
+    }
+    
+    // Initialize map on load
+    setTimeout(initMap, 100);
+    
+    // MQTT connection for real-time updates
+    console.log('🔌 Connecting to MQTT broker...');
+    const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+    
+    client.on("connect", () => {
+      console.log("✅ MQTT connected (Ambulance Map)");
+      document.getElementById('mqtt-status').textContent = '📡 Connected';
+      document.getElementById('mqtt-status').style.background = 'rgba(34, 197, 94, 0.2)';
+      
+      // Subscribe to topics from simulator
+      client.subscribe("ambulance/amb-42/location", (err) => {
+        if (!err) console.log("📍 Subscribed to location updates");
+      });
+      
+      client.subscribe("rescue/eta", (err) => {
+        if (!err) console.log("⏱️ Subscribed to ETA updates");
+      });
+    });
+    
+    client.on("error", (error) => {
+      console.error("❌ MQTT Error:", error);
+      document.getElementById('mqtt-status').textContent = '📡 Error';
+      document.getElementById('mqtt-status').style.background = 'rgba(239, 68, 68, 0.2)';
+    });
+    
+    client.on("message", (topic, payload) => {
+      try {
+        const data = JSON.parse(payload.toString());
+        
+        if (topic === "ambulance/amb-42/location") {
+          console.log("📍 Location Update:", data);
+          
+          if (data.lat && data.lon) {
+            currentAmbulanceLat = data.lat;
+            currentAmbulanceLon = data.lon;
+            
+            // Update ambulance position on map
+            if (ambulanceMarker) {
+              ambulanceMarker.setLatLng([data.lat, data.lon]);
+              updateRoute(data.lat, data.lon);
+            }
+            
+            // Update status display
+            if (data.location_name) {
+              document.getElementById('current-location').textContent = data.location_name;
+            }
+            
+            if (data.speed_kmh) {
+              document.getElementById('current-speed').textContent = data.speed_kmh;
+            }
+            
+            if (data.status) {
+              const statusText = {
+                'pickup': 'At Pickup Location',
+                'en_route': 'En Route to Hospital',
+                'arrived': 'Arrived at Hospital'
+              };
+              document.getElementById('route-status-text').textContent = statusText[data.status] || data.status;
+            }
+          }
+        }
+        
+        if (topic === "rescue/eta") {
+          console.log("⏱️ ETA Update:", data);
+          
+          const etaMinutes = data.eta_minutes || 0;
+          const etaSeconds = data.eta_seconds || 0;
+          const remainingKm = data.remaining_km || 0;
+          const status = data.status || 'en_route';
+          
+          if (status === 'arrived') {
+            document.getElementById("top-eta").textContent = "✅ ARRIVED";
+            document.getElementById("eta-value").textContent = "Arrived!";
+            document.getElementById("distance-value").textContent = "0.0";
+          } else {
+            const etaText = `${etaMinutes}m ${etaSeconds}s`;
+            document.getElementById("top-eta").textContent = etaText;
+            document.getElementById("eta-value").textContent = etaText;
+            document.getElementById("distance-value").textContent = remainingKm.toFixed(2);
+          }
+        }
+      } catch (error) {
+        console.error("❌ Error processing MQTT:", error);
+      }
+    });
+    
+    // Update timestamp every second
+    setInterval(() => {
+      const now = new Date();
+      document.getElementById('last-updated').textContent = 
+        now.toLocaleTimeString('en-US', { hour12: false });
+    }, 1000);
+    
+    console.log('🚑 Ambulance Map initialized and ready for simulator data');
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RescueLink – Live Monitor</title>
+
+  <!-- MQTT client -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <!-- GPS Mode CSS -->
+  <style>
+    /* GPS Mode Styles - Only apply when gps-active */
+    body.gps-active {
+      background: #f4f7fb;
+      color: #1f2937;
+      margin: 0;
+      padding: 0;
+      font-family: "Inter", system-ui, sans-serif;
+    }
+
+    /* Show/Hide modes */
+    body.gps-active .gps-mode {
+      display: block;
+    }
+
+    body.gps-active .satellite-mode {
+      display: none;
+    }
+
+    body.satellite-active .gps-mode {
+      display: none;
+    }
+
+    body.satellite-active .satellite-mode {
+      display: block;
+    }
+
+    /* GPS Mode Topbar */
+    .gps-mode .topbar {
+      height: 64px;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+    }
+
+    .gps-mode .logo {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .gps-mode .logo-icon {
+      font-size: 24px;
+    }
+
+    .gps-mode .connection-status {
+      color: #16a34a;
+      font-weight: 500;
+    }
+
+    .gps-mode .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      background: #22c55e;
+      margin-right: 8px;
+    }
+
+    /* GPS Layout */
+    .gps-mode .container {
+      display: flex;
+      height: calc(100vh - 64px);
+    }
+
+    .gps-mode .sidebar {
+      width: 220px;
+      background: white;
+      padding: 16px;
+      box-shadow: 1px 0 6px rgba(0,0,0,0.05);
+    }
+
+    .gps-mode .nav {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      background: none;
+      text-align: left;
+      cursor: pointer;
+      margin-bottom: 6px;
+      color: #1f2937;
+      font-size: 14px;
+    }
+
+    .gps-mode .nav:hover {
+      background: #f3f4f6;
+    }
+
+    .gps-mode .nav.active {
+      background: #2563eb;
+      color: white;
+    }
+
+    .gps-mode .content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      background: #f4f7fb;
+    }
+
+    .gps-mode .page-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      color: #1f2937;
+    }
+
+    .gps-mode .status.stable {
+      background: #dcfce7;
+      color: #15803d;
+      padding: 6px 14px;
+      border-radius: 999px;
+    }
+
+    /* GPS Grid */
+    .gps-mode .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-auto-rows: 160px;
+      gap: 20px;
+    }
+
+    .gps-mode .card {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+    }
+
+    .gps-mode .card h4 {
+      margin-bottom: 12px;
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .gps-mode .metric {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    .gps-mode .card small {
+      color: #6b7280;
+    }
+
+    .gps-mode .ecg {
+      grid-column: span 2;
+      grid-row: span 2;
+    }
+
+    .gps-mode .ecg canvas {
+      width: 100%;
+      height: calc(100% - 30px);
+      background: black;
+      border-radius: 10px;
+    }
+
+    .gps-mode .map {
+      grid-column: span 1;
+      grid-row: span 2;
+    }
+  </style>
+
+  <!-- Satellite Mode CSS -->
+  <style>
+    /* Satellite Mode Styles - Only apply when satellite-active */
+    body.satellite-active {
+      background: radial-gradient(circle at top, #12263f, #060d18);
+      color: #f8fafc;
+      margin: 0;
+      padding: 0;
+      font-family: Inter, sans-serif;
+    }
+
+    .satellite-mode .top-bar {
+      display: flex;
+      justify-content: space-between;
+      padding: 20px 30px;
+      color: #f8fafc;
+    }
+
+    .satellite-mode .subtitle {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .satellite-mode .satellite-badge {
+      background: #1e2b3c;
+      padding: 12px 16px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+    }
+
+    .satellite-mode .satellite-badge span {
+      display: block;
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+
+    .satellite-mode .dashboard {
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .satellite-mode .card {
+      background: linear-gradient(180deg, #1f2f44, #152235);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid #334155;
+      color: #f8fafc;
+    }
+
+    .satellite-mode .card h3 {
+      margin-bottom: 16px;
+      color: #f8fafc;
+    }
+
+    .satellite-mode .vital-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .satellite-mode .vital-row label {
+      font-size: 14px;
+      color: #94a3b8;
+      display: block;
+      font-weight: 400;
+      margin-bottom: 8px;
+    }
+
+    .satellite-mode .meta {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.8;
+    }
+
+    .satellite-mode .ecg canvas {
+      width: 100%;
+      height: 120px;
+      background: black;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+
+    .satellite-mode .paused p {
+      color: #94a3b8;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .satellite-mode .alert {
+      border: 1px solid #f87171;
+      background: linear-gradient(180deg, #3b0d0d, #220808);
+      color: #fecaca;
+    }
+
+    .satellite-mode .alert strong {
+      color: #fca5a5;
+      font-size: 16px;
+    }
+
+    .satellite-mode .eta {
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    .satellite-mode .eta strong {
+      color: #60a5fa;
+      font-size: 18px;
+    }
+
+    .satellite-mode .bandwidth span {
+      font-size: 24px;
+      font-weight: 700;
+      color: #60a5fa;
+    }
+
+    .satellite-mode .instructions input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0b1624;
+      color: #f8fafc;
+      margin-bottom: 10px;
+    }
+
+    .satellite-mode .instructions button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="gps-active">
+
+  <!-- ========== GPS MODE UI ========== -->
+  <div class="gps-mode">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="logo">
+        <span class="logo-icon">💙</span>
+        <div>
+          <strong>RescueLink</strong><br>
+          <small>Hospital Dashboard</small>
+        </div>
+      </div>
+
+      <div class="connection-status">
+        <span class="dot"></span>
+        <span id="connection-text">Connected • 4G/LTE • MQTT</span>
+      </div>
+
+      <div class="user">
+        Dr. A. Chen ⌄
+      </div>
+    </header>
+
+    <!-- MAIN LAYOUT -->
+    <div class="container">
+
+      <!-- SIDEBAR -->
+      <aside class="sidebar">
+        <button class="nav active">Live Monitor</button>
+        <button class="nav" onclick="window.location.href='map.html'">Map & ETA</button>
+        <button class="nav" onclick="window.location.href='patient.html'">Patient Profile</button>
+        <button class="nav" onclick="window.location.href='messages.html'">Messages</button>
+        <button class="nav">Audit Log</button>
+      </aside>
+
+      <!-- CONTENT -->
+      <main class="content">
+
+        <!-- HEADER -->
+        <div class="page-header">
+          <h2>Patient ID: <span>P-8492</span></h2>
+          <span class="status stable">Stable (Transporting)</span>
+        </div>
+
+        <!-- DASHBOARD GRID -->
+        <div class="grid">
+
+          <!-- HEART RATE -->
+          <div class="card">
+            <h4>Heart Rate</h4>
+            <div class="metric">
+              <span id="heartRate-gps">--</span> bpm
+            </div>
+            <small>Normal Range: 60–100</small>
+          </div>
+
+          <!-- SPO2 -->
+          <div class="card">
+            <h4>SpO₂</h4>
+            <div class="metric">
+              <span id="spo2-gps">--</span> %
+            </div>
+            <small>Normal Range: 95–100</small>
+          </div>
+
+          <!-- ECG -->
+          <div class="card ecg">
+            <h4>Real-time ECG • Lead II</h4>
+            <canvas id="ecgCanvas-gps"></canvas>
+          </div>
+
+          <!-- MAP -->
+          <div class="card map">
+            <h4>Ambulance Location & ETA</h4>
+            <div id="mapPlaceholder">
+              ETA: <span id="eta-gps">--</span><br>
+              Distance: <span id="distance-gps">--</span> km
+            </div>
+          </div>
+
+          <!-- BLOOD PRESSURE -->
+          <div class="card">
+            <h4>Blood Pressure</h4>
+            <div class="metric">
+              <span id="bp-gps">--/--</span> mmHg
+            </div>
+          </div>
+
+          <!-- TEMPERATURE -->
+          <div class="card">
+            <h4>Temperature</h4>
+            <div class="metric">
+              <span id="temp-gps">--</span> °C
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ========== SATELLITE MODE UI ========== -->
+  <div class="satellite-mode">
+    <!-- HEADER -->
+    <header class="top-bar">
+      <div>
+        <h1>RescueLink Hospital Dashboard</h1>
+        <span class="subtitle">SATELLITE MODE ACTIVE • 1440x900</span>
+      </div>
+
+      <div class="satellite-badge">
+        ● Satellite • Iridium SBD
+        <span>Critical Data Only</span>
+      </div>
+    </header>
+
+    <!-- GRID -->
+    <main class="dashboard">
+
+      <!-- CRITICAL VITALS -->
+      <section class="card vitals">
+        <h3>Critical Vitals</h3>
+
+        <div class="vital-row">
+          <div>
+            <label>Heart Rate</label>
+            <span id="heartRate-sat">--</span><small>bpm</small>
+          </div>
+          <div>
+            <label>SpO₂</label>
+            <span id="spo2-sat">--</span><small>%</small>
+          </div>
+        </div>
+
+        <div class="meta">
+          GPS: <span id="gps-sat">--</span><br>
+          Heading: <span id="heading-sat">--</span><br>
+          Updated: <span id="updated-sat">--</span>
+        </div>
+      </section>
+
+      <!-- ECG -->
+      <section class="card ecg">
+        <h3>ECG Waveform</h3>
+        <div class="paused">
+          <canvas id="ecgCanvas-sat"></canvas>
+          <p>Waveform paused</p>
+        </div>
+      </section>
+
+      <!-- MAP -->
+      <section class="card map">
+        <h3>Live Map & ETA</h3>
+        <div class="eta">ETA: <strong id="eta-sat">--</strong></div>
+        <div id="mapPlaceholder-sat"></div>
+      </section>
+
+      <!-- BANDWIDTH -->
+      <section class="card bandwidth">
+        <h3>Bandwidth Usage</h3>
+        <span id="bandwidth-sat">--</span> bytes/msg
+        <p>Compression: ON</p>
+      </section>
+
+      <!-- ALLERGY ALERT -->
+      <section class="card alert">
+        <h3>Patient Allergy Alert</h3>
+        <strong>PENICILLIN, LATEX</strong>
+        <p>Anaphylaxis – administer epinephrine if needed.</p>
+      </section>
+
+      <!-- AUDIT LOG -->
+      <section class="card audit">
+        <h3>Audit Log</h3>
+        <ul id="auditLog-sat"></ul>
+      </section>
+
+      <!-- TWO WAY -->
+      <section class="card instructions">
+        <h3>Two-Way Instructions</h3>
+        <input placeholder="Type instruction…" />
+        <button>Send</button>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- JS -->
+  <script type="module" src="../Javascript/app.js"></script>
+</body>
+</html>
