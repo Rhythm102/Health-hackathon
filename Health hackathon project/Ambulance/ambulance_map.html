@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RescueLink – Ambulance Map & ETA</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- MQTT -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background: #f3f4f6;
+      color: #1f2937;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+    }
+
+    /* LEFT SIDEBAR NAVIGATION */
+    .sidebar {
+      width: 80px;
+      background: linear-gradient(180deg, #1e40af, #1e3a8a);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 0;
+      gap: 30px;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+
+    .sidebar .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      padding: 12px;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .sidebar .nav-item.active {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+    }
+
+    .sidebar .nav-item:hover {
+      color: white;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .sidebar .nav-icon {
+      font-size: 28px;
+    }
+
+    /* MAIN CONTENT */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* COMPACT TOP BAR - Blue Theme */
+    .top-bar {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+    }
+
+    .top-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .ambulance-id {
+      font-size: 16px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .patient-id {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.2);
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
+
+    .top-bar-right {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .status-badge {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-badge.connected {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+    }
+
+    .status-badge.eta {
+      background: #fef3c7;
+      color: #78350f;
+      font-weight: 700;
+    }
+
+    /* Main Container */
+    .container {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      overflow: hidden;
+      background: #f9fafb;
+    }
+
+    /* Map Section */
+    .map-section {
+      position: relative;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ETA Info Box on Map */
+    .eta-box {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: white;
+      border: 2px solid #2563eb;
+      border-radius: 12px;
+      padding: 16px 20px;
+      z-index: 1000;
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.2);
+      min-width: 180px;
+    }
+
+    .eta-box .label {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .eta-box .value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #2563eb;
+    }
+
+    .eta-box .distance {
+      font-size: 14px;
+      color: #1e40af;
+      margin-top: 4px;
+    }
+
+    /* Right Panel */
+    .right-panel {
+      background: white;
+      padding: 20px;
+      overflow-y: auto;
+      border-left: 2px solid #e5e7eb;
+    }
+
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #6b7280;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .hospital-card {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    }
+
+    .hospital-name {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: white;
+    }
+
+    .hospital-address {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 14px;
+    }
+
+    .confirm-btn {
+      width: 100%;
+      background: white;
+      color: #2563eb;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .confirm-btn:hover {
+      background: #eff6ff;
+      transform: translateY(-1px);
+    }
+
+    .confirm-btn:active {
+      transform: scale(0.98);
+    }
+
+    .nearest-hospitals {
+      margin-top: 20px;
+    }
+
+    .hospital-item {
+      background: #f9fafb;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+
+    .hospital-item:hover {
+      background: #eff6ff;
+      border-color: #2563eb;
+    }
+
+    .hospital-icon {
+      width: 36px;
+      height: 36px;
+      background: #2563eb;
+      color: white;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .hospital-info h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 3px;
+      color: #1f2937;
+    }
+
+    .hospital-meta {
+      font-size: 11px;
+      color: #6b7280;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+
+      .right-panel {
+        display: none;
+      }
+
+      .eta-box {
+        bottom: 10px;
+        left: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LEFT SIDEBAR NAVIGATION -->
+  <aside class="sidebar">
+    <a href="messages.html" class="nav-item">
+      <div class="nav-icon">💬</div>
+      <div>Messages</div>
+    </a>
+    <a href="map.html" class="nav-item active">
+      <div class="nav-icon">🗺️</div>
+      <div>Map</div>
+    </a>
+    <div class="nav-item" onclick="alert('Vitals coming soon!')">
+      <div class="nav-icon">📊</div>
+      <div>Vitals</div>
+    </div>
+    <div class="nav-item" onclick="alert('Handover coming soon!')">
+      <div class="nav-icon">🤝</div>
+      <div>Handover</div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+    <!-- COMPACT TOP BAR -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <div class="ambulance-id">🚑 AMB-12</div>
+        <div class="patient-id">Patient: P-8492</div>
+      </div>
+      <div class="top-bar-right">
+        <div class="status-badge connected">📡 4G/LTE</div>
+        <div class="status-badge eta">🕐 ETA <span id="top-eta">8 min</span></div>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+      
+      <!-- Map Section -->
+      <div class="map-section">
+        <div id="map"></div>
+        
+        <!-- ETA Info Box -->
+        <div class="eta-box">
+          <div class="label">ETA to Hospital</div>
+          <div class="value"><span id="eta-value">8</span> min</div>
+          <div class="distance">• <span id="distance-value">3.2</span> km away</div>
+        </div>
+      </div>
+
+      <!-- Right Panel -->
+      <div class="right-panel">
+        <div class="section-title">SELECTED HOSPITAL</div>
+        
+        <div class="hospital-card">
+          <div class="hospital-name">Chirayu Medical College</div>
+          <div class="hospital-address">Bairagarh, Bhopal, MP 462030</div>
+          <button class="confirm-btn" onclick="confirmDestination()">✓ CONFIRM DESTINATION</button>
+        </div>
+
+        <div class="section-title">NEAREST HOSPITALS</div>
+        
+        <div class="nearest-hospitals">
+          <div class="hospital-item" onclick="selectHospital('Chirayu Medical College')">
+            <div class="hospital-icon">🏥</div>
+            <div class="hospital-info">
+              <h4>Chirayu Medical College</h4>
+              <div class="hospital-meta">8 min • 3.2 km</div>
+            </div>
+          </div>
+
+          <div class="hospital-item" onclick="selectHospital('Bansal Hospital')">
+            <div class="hospital-icon">🏥</div>
+            <div class="hospital-info">
+              <h4>Bansal Hospital</h4>
+              <div class="hospital-meta">12 min • 5.1 km</div>
+            </div>
+          </div>
+
+          <div class="hospital-item" onclick="selectHospital('People\'s Hospital')">
+            <div class="hospital-icon">💊</div>
+            <div class="hospital-info">
+              <h4>People's Hospital</h4>
+              <div class="hospital-meta">15 min • 6.8 km</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize map
+    let map, ambulanceMarker, hospitalMarker, routeLine;
+    
+    // Chirayu Medical College Hospital coordinates
+    const HOSPITAL_LAT = 23.2156;
+    const HOSPITAL_LON = 77.4304;
+    
+    // Starting position (Rani Kamlapati)
+    const START_LAT = 23.1830;
+    const START_LON = 77.4160;
+    
+    function initMap() {
+      // Create map centered between ambulance and hospital
+      const centerLat = (START_LAT + HOSPITAL_LAT) / 2;
+      const centerLon = (START_LON + HOSPITAL_LON) / 2;
+      
+      map = L.map('map', {
+        zoomControl: true
+      }).setView([centerLat, centerLon], 13);
+      
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+      
+      // Hospital marker (blue)
+      const hospitalIcon = L.divIcon({
+        html: '<div style="background: #2563eb; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 3px solid white; color: white; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">H</div>',
+        className: '',
+        iconSize: [50, 50]
+      });
+      
+      hospitalMarker = L.marker([HOSPITAL_LAT, HOSPITAL_LON], {
+        icon: hospitalIcon
+      }).addTo(map);
+      
+      hospitalMarker.bindPopup('<b>🏥 Chirayu Medical College</b><br>Destination Hospital');
+      
+      // Ambulance marker (white with blue border)
+      const ambulanceIcon = L.divIcon({
+        html: '<div style="background: white; padding: 8px 12px; border-radius: 8px; font-weight: 700; color: #2563eb; box-shadow: 0 2px 8px rgba(37,99,235,0.4); border: 2px solid #2563eb;">🚑 AMB-12</div>',
+        className: '',
+        iconSize: [80, 40]
+      });
+      
+      ambulanceMarker = L.marker([START_LAT, START_LON], {
+        icon: ambulanceIcon
+      }).addTo(map);
+      
+      ambulanceMarker.bindPopup('<b>🚑 Ambulance Unit 12</b><br>Patient: P-8492<br>En route to hospital');
+      
+      // Draw route
+      updateRoute(START_LAT, START_LON);
+      
+      console.log('✅ Map initialized');
+    }
+    
+    function updateRoute(ambulanceLat, ambulanceLon) {
+      if (!map) return;
+      
+      if (routeLine) {
+        map.removeLayer(routeLine);
+      }
+      
+      routeLine = L.polyline([
+        [ambulanceLat, ambulanceLon],
+        [HOSPITAL_LAT, HOSPITAL_LON]
+      ], {
+        color: '#2563eb',
+        weight: 4,
+        opacity: 0.8,
+        dashArray: '10, 10'
+      }).addTo(map);
+      
+      const bounds = L.latLngBounds([
+        [ambulanceLat, ambulanceLon],
+        [HOSPITAL_LAT, HOSPITAL_LON]
+      ]);
+      map.fitBounds(bounds, { padding: [80, 80] });
+    }
+    
+    function updateAmbulancePosition(lat, lon) {
+      if (!map || !ambulanceMarker) return;
+      
+      ambulanceMarker.setLatLng([lat, lon]);
+      updateRoute(lat, lon);
+      
+      console.log(`📍 Ambulance moved to: ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+    }
+    
+    function confirmDestination() {
+      alert('✓ Destination confirmed!\n\nChirayu Medical College has been notified of your arrival.');
+    }
+    
+    function selectHospital(name) {
+      if (confirm('Switch destination to ' + name + '?')) {
+        alert('Destination updated to: ' + name);
+      }
+    }
+    
+    // Initialize map after page loads
+    setTimeout(initMap, 100);
+    
+    // MQTT connection for real-time updates
+    const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+    
+    client.on("connect", () => {
+      console.log("✅ MQTT connected (Ambulance Map)");
+      client.subscribe("ambulance/amb-42/location");
+      client.subscribe("rescue/eta");
+    });
+    
+    client.on("message", (topic, payload) => {
+      try {
+        const data = JSON.parse(payload.toString());
+        
+        if (topic === "ambulance/amb-42/location" && data.lat && data.lon) {
+          // Update ambulance position
+          updateAmbulancePosition(data.lat, data.lon);
+        }
+        
+        if (topic === "rescue/eta") {
+          // Update ETA display
+          if (data.eta !== undefined) {
+            document.getElementById("top-eta").textContent = data.eta + " min";
+            document.getElementById("eta-value").textContent = data.eta;
+          }
+          if (data.distance !== undefined) {
+            document.getElementById("distance-value").textContent = data.distance.toFixed(1);
+          }
+        }
+      } catch (error) {
+        console.error("Error processing MQTT:", error);
+      }
+    });
+    
+    console.log('🗺️ Ambulance Map page loaded');
+  </script>
+
+</body>
+</html>

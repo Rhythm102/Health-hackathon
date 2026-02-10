@@ -1,0 +1,92 @@
+[
+  {
+    "sender": "ambulance",
+    "text": "🩸 SEVERE BLEEDING - Prep OR",
+    "timestamp": 1770579648581,
+    "id": 1770579648589.9011
+  },
+  {
+    "sender": "doctor",
+    "text": "🫁 Administer Oxygen Immediately",
+    "timestamp": 1770579653605,
+    "id": 1770579653603.6707
+  },
+  {
+    "sender": "doctor",
+    "text": "🫁 Administer Oxygen Immediately",
+    "timestamp": 1770638939254,
+    "id": 1770638939255.4255
+  },
+  {
+    "sender": "doctor",
+    "text": "💊 Administer Aspirin 325mg",
+    "timestamp": 1770653924905,
+    "id": 1770653924906.059
+  },
+  {
+    "sender": "doctor",
+    "text": "💊 Administer Aspirin 325mg",
+    "timestamp": 1770654357089,
+    "id": 1770654357088.7717
+  },
+  {
+    "sender": "ambulance",
+    "text": "🚨 IMMEDIATE SURGERY REQUIRED",
+    "timestamp": 1770654365945,
+    "id": 1770654365944.8184
+  },
+  {
+    "sender": "doctor",
+    "text": "🫁 Administer Oxygen Immediately",
+    "timestamp": 1770658216923,
+    "id": 1770658216920.4458
+  },
+  {
+    "sender": "ambulance",
+    "text": "🩸 SEVERE BLEEDING - Prep OR",
+    "timestamp": 1770658220251,
+    "id": 1770658220247.8962
+  },
+  {
+    "sender": "ambulance",
+    "text": "🚨 IMMEDIATE SURGERY REQUIRED",
+    "timestamp": 1770658241994,
+    "id": 1770658241993.6443
+  },
+  {
+    "sender": "doctor",
+    "text": "🏥 Trauma Team Activated - ETA?",
+    "timestamp": 1770658247283,
+    "id": 1770658247279.9812
+  },
+  {
+    "sender": "ambulance",
+    "text": "🚨 IMMEDIATE SURGERY REQUIRED",
+    "timestamp": 1770658923427,
+    "id": 1770658923423.2954
+  },
+  {
+    "sender": "ambulance",
+    "text": "💔 HEART ATTACK - Prep Cath Lab",
+    "timestamp": 1770658927034,
+    "id": 1770658927029.6206
+  },
+  {
+    "sender": "ambulance",
+    "text": "🚨 IMMEDIATE SURGERY REQUIRED",
+    "timestamp": 1770659070827,
+    "id": 1770659070826.4797
+  },
+  {
+    "sender": "ambulance",
+    "text": "✅ Vitals Stable - ETA 3 min",
+    "timestamp": 1770660088647,
+    "id": 1770660088646.262
+  },
+  {
+    "sender": "doctor",
+    "text": "🫁 Administer Oxygen Immediately",
+    "timestamp": 1770660096638,
+    "id": 1770660096637.1272
+  }
+]
